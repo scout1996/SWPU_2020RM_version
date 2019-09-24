@@ -130,11 +130,11 @@ bool ArmorDescriptor::isArmorPattern() const
     imageNewSize = regulatedImg.reshape(0,1);//图像深度不变，把图片矩阵转为一行储存
     imageNewSize.convertTo(imageNewSize,CV_32FC1);
 
-    Ptr<ml::SVM> svmClassifier = ml::StatModel::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
-    int result = static_cast<int>(svmClassifier->predict(imageNewSize));
-    if(result == 1) return true;
-    else
-        return false;
+//    Ptr<ml::SVM> svmClassifier = ml::StatModel::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
+//    int result = static_cast<int>(svmClassifier->predict(imageNewSize));
+//    if(result == 1) return true;
+//    else
+//        return false;
 }
 
 ArmorDetector::ArmorDetector(const ArmorParam& armorParam)
