@@ -1,11 +1,18 @@
 #include "opencv2/opencv.hpp"
+#include "./Main/threadcontrol.h"
 #include "thread"
-
-using namespace cv;
-using namespace std;
 
 int main()
 {
-    cout << "Hello World!" << endl;
+    RM::ThreadControl _threadControl;
+
+    _threadControl.init();
+
+    std::thread imageProduceThread(&RM::ThreadControl::imageProduce,&_threadControl);
+    std::thread imageProcessThread(&RM::ThreadControl::imageProcess,&_threadControl);
+
+    imageProduceThread.join();
+    imageProcessThread.join();
+
     return 0;
 }

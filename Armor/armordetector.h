@@ -6,8 +6,13 @@
 
 namespace RM {
 
+
 #define SVM_SAMPLE_SIZE Size(50,50)
 #define SVM_TRAINING_MODEL_PATH "../TestVideo/1.avi"
+
+#define SHOW_RESULT
+#define DEBUG_DETECTION
+//#define USED_CAMERA
 
 enum ColorChannels
 {
@@ -69,14 +74,14 @@ struct ArmorParam
     ArmorParam()
     {
         //pre-treatment
-        brightness_threshold = 210;
+        brightness_threshold = 250;
         color_threshold = 40;
         light_color_detect_extend_ratio = 1.1f;
 
         // Filter lights
-        light_min_area = 10.0f;
+        light_min_area = 10.0f; //10.0
         light_max_angle = 45.0f;
-        light_min_size = 5.0f;
+        light_min_size = 5.0f;  //5.0
         light_contour_min_solidity = 0.5f;
         light_max_ratio = 1.0f;
 

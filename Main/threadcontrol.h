@@ -2,8 +2,39 @@
 #define THREADCONTROL_H
 
 #include "opencv2/opencv.hpp"
+#include<memory>
+#include"./Armor/armordetector.h"
+#include<mutex>
 
-#define ARMOR_VIDEO_PATH "../TestVideo/1.avi"
+
+namespace RM {
+
+#define ARMOR_VIDEO_PATH "/home/young/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/TestVideo/1.avi"
+#define ARMOR_IMAGE_PATH "/home/young/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/TestImage/1.jpg"
+
+#define DEBUG_USED_VIDEO
+//#define DEBUG_USED_IMAGE
+
+#define GET_WORK_DURATION
+
+class FrameBuffer
+{
+public:
+    FrameBuffer(size_t size);
+    ~FrameBuffer(){}
+
+    bool push(const cv::Mat& frame);
+
+    bool getLatest(cv::Mat& frame);
+
+private:
+    std::vector<cv::Mat> _frames;
+
+    std::vector<std::mutex> _mutexs;
+
+    size_t _tailIdx;
+    size_t _headIdx;
+};
 
 class ThreadControl
 {
@@ -25,6 +56,18 @@ public:
 
 private:
     cv::Mat _frame;
+    cv::Mat _srcImg;
+    bool _quitFlag;
+
+    float startTime;
+    float workDuration;
+
+    FrameBuffer _buffer;
+
+    /* Armor detector */
+    std::unique_ptr<ArmorDetector> _armorDetectorPtr;
 };
+
+}
 
 #endif // THREADCONTROL_H
