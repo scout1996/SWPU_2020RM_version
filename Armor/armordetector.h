@@ -8,11 +8,20 @@ namespace RM {
 
 
 #define SVM_SAMPLE_SIZE Size(50,50)
-#define SVM_TRAINING_MODEL_PATH "../TestVideo/1.avi"
+#define SVM_TRAINING_MODEL_PATH "/home/young/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/SVM_Model/svm.xml"
 
 #define SHOW_RESULT
 #define DEBUG_DETECTION
 //#define USED_CAMERA
+
+enum RobotType
+{
+    Hero = 1,      //英雄
+    Engineer = 2,  //工程
+    Standard = 3,  //步兵
+    Sentry =4,     //哨兵
+    Aerial = 5     //无人机
+};
 
 enum ColorChannels
 {
@@ -100,10 +109,10 @@ struct ArmorParam
         armor_max_aspect_ratio_ = 5.0f;
 
         //装甲板尺寸mm
-        big_armor_width = 235;
-        big_armor_height = 127;
-        small_armor_width =140;
-        small_armor_height = 125;
+        big_armor_width = 100;
+        big_armor_height = 60;
+        small_armor_width =50;
+        small_armor_height = 50;
 
         //other params
         distance_offset_normalized_base = 200.0f;
@@ -172,7 +181,7 @@ public:
     //有参构造函数
     ArmorDescriptor(const LightDescriptor& leftLight, const LightDescriptor& rightLight, const int type, const cv::Mat& roiImg,const float rotationScore, ArmorParam armorParam);
     //从原图像四个顶点经过透视变换后得到正视图
-    void getFrontImg(const cv::Mat& digitalImg);
+    bool getFrontImg(const cv::Rect& digitalRect,const cv::Mat& roiImg);
 
     //清除装甲板数据
     void informationClear()
@@ -201,6 +210,7 @@ public:
     int armorType;
     ArmorParam _param;
     std::vector<cv::Point2f> vertex;//装甲板的四个顶点
+    std::string pictureName;
 };
 
 class ArmorDetector

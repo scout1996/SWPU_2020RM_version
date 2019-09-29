@@ -41,7 +41,7 @@ bool FrameBuffer::getLatest(cv::Mat& frame)
     {
         return false;
     }
-
+    //拿到了锁
     frame = _frames[headIdx];
     return true;
 }

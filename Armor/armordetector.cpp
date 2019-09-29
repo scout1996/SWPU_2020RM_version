@@ -7,6 +7,8 @@
   *                图像时先是全局搜索，找到装甲板后进行局部搜索（追踪模式），提高图像处理的
   *                速度，而在局部搜索处理3000张图片后，变为全图搜索，排除有潜在的高分装甲板出现
   *             3、旋转矩形角点是以左下角为0点，顺时针排序
+  *             4、透视变换的坑：warpPerspective的原始图像要比getPerspectiveTransform的
+  *                原4点面积大才能正常变换或者把原4点看做原始图像的内部点，否则是一片黑色。
   * @history
   *  Version       Date            Author          status
   *  V2.0.0      2019-9-27         Young            完成
@@ -78,25 +80,24 @@ ArmorDescriptor::ArmorDescriptor(const LightDescriptor& leftLight, const LightDe
     armorType = type;
 
     Rect digitalRect;
-    Mat digitalImg;
     Rect srcImgRect = Rect(Point(0,0),roiImg.size());
 
     if(armorType == BIG_ARMOR)
     {
         //保留大装甲板的数字区域
-        digitalRect = Rect(Point2f(vertex[0].x+(vertex[1].x-vertex[0].x)/4,vertex[0].y),Size((vertex[1].x-vertex[0].x)/2,extendLeftLightRec.size.height));
+        digitalRect = Rect(Point2f(vertex[0].x+(vertex[1].x-vertex[0].x)/4,MIN(vertex[0].y,vertex[1].y)),
+                Size((vertex[1].x-vertex[0].x)/2,MAX(extendLeftLightRec.size.height,extendRightLightRec.size.height)));
         digitalRect = digitalRect & srcImgRect; //防止digitalRect越界
-        digitalImg = roiImg(digitalRect);
     }
     else if(armorType == SMALL_ARMOR)
     {
         //保留小装甲板的数字区域
-        digitalRect = Rect(_leftLightVertex[1],Size(_rightLightVertex[0].x-_leftLightVertex[1].x,extendLeftLightRec.size.height));
+        digitalRect = Rect(_leftLightVertex[2],Size(_rightLightVertex[1].x-_leftLightVertex[2].x,
+                MAX(extendLeftLightRec.size.height,extendRightLightRec.size.height)));
         digitalRect = digitalRect & srcImgRect; //防止digitalRect越界
-        digitalImg = roiImg(digitalRect);
     }
     //得到数字区域的正视图
-    getFrontImg(digitalImg);
+    getFrontImg(digitalRect,roiImg);
 
     // 计算旋转分数
     rotationScore = rotaScore;
@@ -110,9 +111,12 @@ ArmorDescriptor::ArmorDescriptor(const LightDescriptor& leftLight, const LightDe
 }
 
 //要先用上面的构造函数完成初始化，_param才有值，不然该程序里面要出错
-void ArmorDescriptor::getFrontImg(const Mat& digitalImg)
+bool ArmorDescriptor::getFrontImg(const Rect& digitalRect,const Mat& roiImg)
 {
     int width, height;
+
+    if(roiImg.empty()) return false;//不加这句话，warpPerspective会报错
+
     if(armorType == BIG_ARMOR)
     {
         width = _param.big_armor_width;
@@ -124,23 +128,36 @@ void ArmorDescriptor::getFrontImg(const Mat& digitalImg)
         height = _param.small_armor_height;
     }
 
-    Point2f src[4]={vertex[0],vertex[1],vertex[2],vertex[3]};
+    Point2f src[4]={digitalRect.tl(),Point2f(digitalRect.tl().x+digitalRect.width,digitalRect.tl().y),
+                    digitalRect.br(),Point2f(digitalRect.br().x-digitalRect.width,digitalRect.br().y)};
     Point2f dis[4]={Point2f(0.0f,0.0f),Point2f(width,0.0f),Point2f(width,height),Point2f(0.0f,height)};
-    Mat _perspectiveTransformationMatrix = getPerspectiveTransform(src,dis);//得到透视变换矩阵
-    //warpPerspective(digitalImg,frontImg,_perspectiveTransformationMatrix,Size(width,height));//进行透视变换
+    const Mat _perspectiveTransformationMatrix = getPerspectiveTransform(src,dis);//得到透视变换矩阵
+    warpPerspective(roiImg,frontImg,_perspectiveTransformationMatrix,Size(width,height));//进行透视变换(原始图像要比送入getPerspectiveTransform的原4点面积大才能正常变换，否则是一片黑色)
+
+//    static int f = 1;
+//    uchar keyVal = (uchar)waitKey(20);
+//    if(keyVal == 'q')
+//    {
+//        printf("\t\t已成功保存%d张图片至工程文件夹\n",f);
+//        pictureName = "/home/young/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/Samples/"
+//                +to_string(f++)+".jpg"; //to_string:将数值转化为字符串。返回对应的字符串
+//        imwrite(pictureName,frontImg);
+//    }
+    return true;
 }
 
 bool ArmorDescriptor::isArmorPattern() const
 {
     Mat regulatedImg,imageNewSize;
     frontImg.copyTo(regulatedImg);
+    cvtColor(regulatedImg,regulatedImg,COLOR_BGR2GRAY);
     resize(regulatedImg,regulatedImg,SVM_SAMPLE_SIZE); //统一训练集尺寸
     imageNewSize = regulatedImg.reshape(0,1);//图像深度不变，把图片矩阵转为一行储存
     imageNewSize.convertTo(imageNewSize,CV_32FC1);
 
-    Ptr<ml::SVM> svmClassifier = ml::StatModel::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
+    Ptr<ml::SVM> svmClassifier = ml::SVM::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
     int result = static_cast<int>(svmClassifier->predict(imageNewSize));
-    if(result == 1) return true;
+    if(result == RM::Hero) return true;
     else
         return false;
 }
@@ -164,19 +181,19 @@ void ArmorDetector::loadImg(const cv::Mat&  srcImg)
     _srcImg = srcImg;
     Rect srcImgRect = Rect(Point(0,0),_srcImg.size());
 
-    if(_armorFindFlag == ARMOR_LOCAL && _trackCounter != _param.max_track_num)//在追踪模式下，连续处理3000张图片后，进行全局检测一次
-    {
-        Rect tempRect = boundingRect(_targetArmor.vertex);
-        tempRect = cvex::scaleRect(tempRect, Vec2f(2,2));	//以中心为锚点，长宽各放大2倍
-        _roi = tempRect & srcImgRect;//防止tempRect越界
-        _roiImg = _srcImg(_roi).clone();
-    }
-    else
-    {
+//    if(_armorFindFlag == ARMOR_LOCAL && _trackCounter != _param.max_track_num)//在追踪模式下，连续处理3000张图片后，进行全局检测一次
+//    {
+//        Rect tempRect = boundingRect(_targetArmor.vertex);
+//        tempRect = cvex::scaleRect(tempRect, Vec2f(2,2));	//以中心为锚点，长宽各放大2倍
+//        _roi = tempRect & srcImgRect;//防止tempRect越界
+//        _roiImg = _srcImg(_roi).clone();
+//    }
+//    else
+//    {
         _roi = srcImgRect;
         _roiImg = _srcImg.clone();
         _trackCounter = 0;
-    }
+//    }
 }
 
 int ArmorDetector::detect()
@@ -202,7 +219,6 @@ int ArmorDetector::detect()
     binaryImage=Mat::zeros(imageBrightness.size(),CV_8UC1);
     threshold(equalImage,binaryImage,_param.brightness_threshold,255,THRESH_BINARY);
     morphologyEx(binaryImage,binaryImage,MORPH_OPEN,debugElement);//开运算，消除细小物体
-    imshow("【二值图】",binaryImage);
 #endif
 
 #ifdef USED_CAMERA
@@ -280,11 +296,7 @@ int ArmorDetector::detect()
             //得到匹配的装甲板,_roiImg为原始图像640*480，或以上一帧最优装甲板的中心位置扩大装甲板的两倍区域
             ArmorDescriptor armor(leftLight, rightLight, armorType,_roiImg, rotationScore, _param);
 
-            for(size_t i=0;i<4;i++) //**********************************************************************************
-                line(_roiImg,armor.vertex[i],armor.vertex[(i+1)%4],Scalar(0,0,255));
-            imshow("【原始图像】",_roiImg);
-
-            //_armors.emplace_back(armor);
+            _armors.emplace_back(armor);
         }
     }
     if(_armors.empty()) return _armorFindFlag = ARMOR_NO;
@@ -311,6 +323,10 @@ int ArmorDetector::detect()
     //选择出一个最高得分的矩阵给_targetArmor
     sort(_armors.begin(), _armors.end(), compareArmor);
     _targetArmor = _armors[0];
+
+    for(size_t i=0;i<4;i++) //*********************************************************************************************
+        line(_roiImg,_targetArmor.vertex[i],_targetArmor.vertex[(i+1)%4],Scalar(0,0,255),2);
+    imshow("【原始图像】",_roiImg);
 
     //更新在追踪模式下的处理次数，达到3000，变为整幅检测
     _trackCounter++;
