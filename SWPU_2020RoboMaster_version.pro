@@ -8,7 +8,8 @@ SOURCES += \
     Main/main.cpp \
     Main/threadcontrol.cpp \
     Armor/armordetector.cpp \
-    General/opencv_extended.cpp
+    General/opencv_extended.cpp \
+    Pose/AngleSolver.cpp
 
 INCLUDEPATH += /usr/local/include \
                /usr/local/include/opencv \
@@ -27,4 +28,8 @@ LIBS += /usr/local/lib/libopencv_imgproc.so \
 HEADERS += \
     Main/threadcontrol.h \
     Armor/armordetector.h \
-    General/opencv_extended.h
+    General/opencv_extended.h \
+    Pose/AngleSolver.hpp
+
+DISTFILES += \
+    camera_param/camera.xml

@@ -50,6 +50,20 @@ namespace RM {
     }                           \
 }
 
+ArmorDescriptor::ArmorDescriptor()
+{
+    rotationScore = 0;
+    sizeScore = 0;
+    distanceScore = 0;
+    finalScore = 0;
+    vertex.resize(4); //设置vertex容器的大小为4
+    for(int i = 0; i < 4; i++)
+    {
+        vertex[i] = cv::Point2f(0, 0);
+    }
+    armorType = UNKNOWN_ARMOR;
+}
+
 ArmorDescriptor::ArmorDescriptor(const LightDescriptor& leftLight, const LightDescriptor& rightLight, const int type, const cv::Mat& roiImg,const float rotaScore, ArmorParam armorParam)
 {
     _param = armorParam;
@@ -140,26 +154,39 @@ bool ArmorDescriptor::getFrontImg(const Rect& digitalRect,const Mat& roiImg)
 //    {
 //        printf("\t\t已成功保存%d张图片至工程文件夹\n",f);
 //        pictureName = "/home/young/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/Samples/"
-//                +to_string(f++)+".jpg"; //to_string:将数值转化为字符串。返回对应的字符串
-//        imwrite(pictureName,frontImg);
-//    }
+//                       +to_string(f++)+".jpg"; //to_string:将数值转化为字符串。返回对应的字符串
+//       //        imwrite(pictureName,frontImg);
+    //    }
+
     return true;
 }
 
+Ptr<ml::SVM> svmClassifier = ml::SVM::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
 bool ArmorDescriptor::isArmorPattern() const
 {
     Mat regulatedImg,imageNewSize;
-    frontImg.copyTo(regulatedImg);
-    cvtColor(regulatedImg,regulatedImg,COLOR_BGR2GRAY);
+    cvtColor(frontImg,regulatedImg,COLOR_BGR2GRAY);
     resize(regulatedImg,regulatedImg,SVM_SAMPLE_SIZE); //统一训练集尺寸
     imageNewSize = regulatedImg.reshape(0,1);//图像深度不变，把图片矩阵转为一行储存
     imageNewSize.convertTo(imageNewSize,CV_32FC1);
 
-    Ptr<ml::SVM> svmClassifier = ml::SVM::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
     int result = static_cast<int>(svmClassifier->predict(imageNewSize));
     if(result == RM::Hero) return true;
     else
         return false;
+}
+
+void ArmorDescriptor::informationClear()
+{
+    rotationScore = 0;
+    sizeScore = 0;
+    distanceScore = 0;
+    finalScore = 0;
+    for(int i = 0; i < 4; i++)
+    {
+        vertex[i] = cv::Point2f(0, 0);
+    }
+    armorType = UNKNOWN_ARMOR;
 }
 
 ArmorDetector::ArmorDetector(const ArmorParam& armorParam)
@@ -181,19 +208,19 @@ void ArmorDetector::loadImg(const cv::Mat&  srcImg)
     _srcImg = srcImg;
     Rect srcImgRect = Rect(Point(0,0),_srcImg.size());
 
-//    if(_armorFindFlag == ARMOR_LOCAL && _trackCounter != _param.max_track_num)//在追踪模式下，连续处理3000张图片后，进行全局检测一次
-//    {
-//        Rect tempRect = boundingRect(_targetArmor.vertex);
-//        tempRect = cvex::scaleRect(tempRect, Vec2f(2,2));	//以中心为锚点，长宽各放大2倍
-//        _roi = tempRect & srcImgRect;//防止tempRect越界
-//        _roiImg = _srcImg(_roi).clone();
-//    }
-//    else
-//    {
+    if(_armorFindFlag == ARMOR_LOCAL && _trackCounter != _param.max_track_num)//在追踪模式下，连续处理3000张图片后，进行全局检测一次
+    {
+        Rect tempRect = boundingRect(_targetArmor.vertex);
+        tempRect = cvex::scaleRect(tempRect, Vec2f(2,2));	//以中心为锚点，长宽各放大2倍
+        _roi = tempRect & srcImgRect;//防止tempRect越界
+        _roiImg = _srcImg(_roi).clone();
+    }
+    else
+    {
         _roi = srcImgRect;
         _roiImg = _srcImg.clone();
         _trackCounter = 0;
-//    }
+    }
 }
 
 int ArmorDetector::detect()
@@ -324,14 +351,25 @@ int ArmorDetector::detect()
     sort(_armors.begin(), _armors.end(), compareArmor);
     _targetArmor = _armors[0];
 
+#ifdef SHOW_RESULT
     for(size_t i=0;i<4;i++) //*********************************************************************************************
         line(_roiImg,_targetArmor.vertex[i],_targetArmor.vertex[(i+1)%4],Scalar(0,0,255),2);
     imshow("【原始图像】",_roiImg);
-
+#endif
     //更新在追踪模式下的处理次数，达到3000，变为整幅检测
     _trackCounter++;
 
     return _armorFindFlag = ARMOR_LOCAL;
+}
+
+const vector<Point2f> ArmorDetector::getArmorVertex() const
+{
+    return _targetArmor.vertex;
+}
+
+int ArmorDetector::getArmorType() const
+{
+    return _targetArmor.armorType;
 }
 
 

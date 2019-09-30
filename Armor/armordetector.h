@@ -103,8 +103,6 @@ struct ArmorParam
         // Filter armor
         armor_big_armor_ratio = 3.2f;
         armor_small_armor_ratio = 2.0f;
-        //armor_max_height_ = 100.0;
-        //armor_max_angle_ = 30.0;
         armor_min_aspect_ratio_ = 1.0f;
         armor_max_aspect_ratio_ = 5.0f;
 
@@ -164,41 +162,19 @@ class ArmorDescriptor
 public:
 
     //无参构造函数
-    ArmorDescriptor()
-    {
-        rotationScore = 0;
-        sizeScore = 0;
-        distanceScore = 0;
-        finalScore = 0;
-        vertex.resize(4); //设置vertex容器的大小为4
-        for(int i = 0; i < 4; i++)
-        {
-            vertex[i] = cv::Point2f(0, 0);
-        }
-        armorType = UNKNOWN_ARMOR;
-    }
+    ArmorDescriptor();
 
     //有参构造函数
     ArmorDescriptor(const LightDescriptor& leftLight, const LightDescriptor& rightLight, const int type, const cv::Mat& roiImg,const float rotationScore, ArmorParam armorParam);
+
     //从原图像四个顶点经过透视变换后得到正视图
     bool getFrontImg(const cv::Rect& digitalRect,const cv::Mat& roiImg);
 
-    //清除装甲板数据
-    void informationClear()
-    {
-        rotationScore = 0;
-        sizeScore = 0;
-        distanceScore = 0;
-        finalScore = 0;
-        for(int i = 0; i < 4; i++)
-        {
-            vertex[i] = cv::Point2f(0, 0);
-        }
-        armorType = UNKNOWN_ARMOR;
-    }
-
     //利用SVM判断中心图案是否为数字，是不是装甲板
     bool isArmorPattern() const;
+
+    //清除装甲板数据
+    void informationClear();
 
 public:
     std::array<cv::RotatedRect,2> lightPairs;//0 left light, 1 right light
@@ -273,6 +249,7 @@ private:
     std::vector<ArmorDescriptor> _armors;
 
 private:
+    //sort函数的回调函数，按照下列方法排序
     static bool compareLight(const LightDescriptor ld1, const LightDescriptor ld2)
     {
         return ld1.center.x < ld2.center.x;

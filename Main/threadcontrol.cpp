@@ -51,7 +51,8 @@ ThreadControl::ThreadControl():
     startTime(0.0f),
     workDuration(0.0f),
     _buffer(6),
-    _armorDetectorPtr(new ArmorDetector)
+    _armorDetectorPtr(new ArmorDetector),
+    _solverPtr(new AngleSolver)
 {}
 
 void ThreadControl::init()
@@ -60,6 +61,11 @@ void ThreadControl::init()
     ArmorParam armorParam;
     _armorDetectorPtr->init(armorParam);
     _armorDetectorPtr->setEnemyColor(RM::RED);
+
+    //Initialize angle solver
+    AngleSolverParam angleParam;
+    angleParam.read_XMLFile();
+    _solverPtr ->init(angleParam);
 }
 
 void ThreadControl::imageProduce()
@@ -94,6 +100,10 @@ void ThreadControl::imageProduce()
 void ThreadControl::imageProcess()
 {
     int armorFindFlag = 0;
+    vector<Point2f> armorVertex;
+    int armorType;
+    vector<double> p4p_Result;
+
     this_thread::sleep_for(chrono::milliseconds(200));//等待图片或视频加载成功
 
     while(1)
@@ -109,6 +119,13 @@ void ThreadControl::imageProcess()
         _armorDetectorPtr->loadImg(_srcImg);
         armorFindFlag = _armorDetectorPtr->detect();
 
+        if(armorFindFlag == ArmorDetector::ARMOR_LOCAL || armorFindFlag == ArmorDetector::ARMOR_GLOBAL)
+        {
+            armorType = _armorDetectorPtr->getArmorType();
+            armorVertex = _armorDetectorPtr->getArmorVertex();
+            p4p_Result = _solverPtr->p4pSolution(armorVertex,armorType);
+            //cout << "yawErr= " <<p4p_Result[0]<< " pitchErr= "<<p4p_Result[1]<<" 距离= "<<p4p_Result[2]<<endl;
+        }
 #ifdef GET_WORK_DURATION
         workDuration =  ((float)getTickCount() - startTime)/getTickFrequency();
         cout << "处理一帧的时间 = " << workDuration*1000 << " ms" << endl;

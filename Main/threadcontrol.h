@@ -4,6 +4,7 @@
 #include "opencv2/opencv.hpp"
 #include<memory>
 #include"./Armor/armordetector.h"
+#include "./Pose/AngleSolver.hpp"
 #include<mutex>
 
 
@@ -15,7 +16,7 @@ namespace RM {
 #define DEBUG_USED_VIDEO
 //#define DEBUG_USED_IMAGE
 
-#define GET_WORK_DURATION
+//#define GET_WORK_DURATION
 
 class FrameBuffer
 {
@@ -66,6 +67,9 @@ private:
 
     /* Armor detector */
     std::unique_ptr<ArmorDetector> _armorDetectorPtr;
+
+    /* Angle solver */
+    std::unique_ptr<AngleSolver> _solverPtr;
 };
 
 }
