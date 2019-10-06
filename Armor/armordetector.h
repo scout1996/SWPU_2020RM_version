@@ -8,6 +8,7 @@ namespace RM {
 
 
 #define SVM_SAMPLE_SIZE Size(50,50)
+
 #define SVM_TRAINING_MODEL_PATH "/home/young-pc/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/SVM_Model/svm.xml"
 
 #define SHOW_RESULT
