@@ -6,9 +6,12 @@
   *             2、装甲板的寻找方式分为全图寻找或以装甲板图像2倍大的区域寻找（追踪模式），处理第一帧
   *                图像时先是全局搜索，找到装甲板后进行局部搜索（追踪模式），提高图像处理的
   *                速度，而在局部搜索处理3000张图片后，变为全图搜索，排除有潜在的高分装甲板出现
+  *             3、旋转矩形角点是以左下角为0点，顺时针排序
+  *             4、透视变换的坑：warpPerspective的原始图像要比getPerspectiveTransform的
+  *                原4点面积大才能正常变换或者把原4点看做原始图像的内部点，否则是一片黑色。
   * @history
   *  Version       Date            Author          status
-  *  V1.0.0      2019-9-21         Young            完成
+  *  V2.0.0      2019-9-27         Young            完成
   *
   @verbatim
   ==============================================================================
@@ -19,7 +22,7 @@
 */
 
 #include "armordetector.h"
-#include"../General/opencv_extended.h"
+#include"./General/opencv_extended.h"
 #include<algorithm> //swap的头文件
 #include<cmath>
 
@@ -47,6 +50,19 @@ namespace RM {
     }                           \
 }
 
+ArmorDescriptor::ArmorDescriptor()
+{
+    rotationScore = 0;
+    sizeScore = 0;
+    distanceScore = 0;
+    finalScore = 0;
+    vertex.resize(4); //设置vertex容器的大小为4
+    for(int i = 0; i < 4; i++)
+    {
+        vertex[i] = cv::Point2f(0, 0);
+    }
+    armorType = UNKNOWN_ARMOR;
+}
 
 ArmorDescriptor::ArmorDescriptor(const LightDescriptor& leftLight, const LightDescriptor& rightLight, const int type, const cv::Mat& roiImg,const float rotaScore, ArmorParam armorParam)
 {
@@ -55,8 +71,8 @@ ArmorDescriptor::ArmorDescriptor(const LightDescriptor& leftLight, const LightDe
     lightPairs[0] = leftLight.rect();
     lightPairs[1] = rightLight.rect();
     //把灯条的高度扩大两倍，因为灯条高度本来就比装甲板的高度短，扩大两倍，使得可以描述装甲板的高度
-    Size e_LeftLightSize(int(lightPairs[0].size.width),int(lightPairs[0].size.height*2));
-    Size e_RightLightSize(int(lightPairs[1].size.width),int(lightPairs[1].size.height*2));
+    Size e_LeftLightSize(int(lightPairs[0].size.width),int(lightPairs[0].size.height*2.6));
+    Size e_RightLightSize(int(lightPairs[1].size.width),int(lightPairs[1].size.height*2.6));
 
     RotatedRect extendLeftLightRec(lightPairs[0].center,e_LeftLightSize,lightPairs[0].angle);
     RotatedRect extendRightLightRec(lightPairs[1].center,e_RightLightSize,lightPairs[1].angle);
@@ -64,31 +80,38 @@ ArmorDescriptor::ArmorDescriptor(const LightDescriptor& leftLight, const LightDe
     //获得装甲板的四个顶点坐标
     Point2f _leftLightVertex[4];
     extendLeftLightRec.points(_leftLightVertex);
+
     Point2f _rightLightVertex[4];
     extendRightLightRec.points(_rightLightVertex);
-    vertex[0] = _leftLightVertex[0];
-    vertex[1] = _rightLightVertex[1];
-    vertex[2] = _rightLightVertex[2];
-    vertex[3] = _leftLightVertex[3];
+
+    vertex.resize(4); //指定容器的大小为4,这里不写这句会出现错误，我也不知道为什么
+    //_leftLightVertex的排布顺序为左下角为0，顺时针排序，我使用的左上角为0，顺时针排序
+    vertex[0] = _leftLightVertex[1];
+    vertex[1] = _rightLightVertex[2];
+    vertex[2] = _rightLightVertex[3];
+    vertex[3] = _leftLightVertex[0];
 
     armorType = type;
 
     Rect digitalRect;
-    Mat digitalImg;
+    Rect srcImgRect = Rect(Point(0,0),roiImg.size());
+
     if(armorType == BIG_ARMOR)
     {
         //保留大装甲板的数字区域
-        digitalRect = Rect(Point2f(vertex[0].x+(vertex[1].x-vertex[0].x)/4,vertex[0].y),Size((vertex[1].x-vertex[0].x)/2,extendLeftLightRec.size.height));
-        digitalImg = roiImg(digitalRect);
+        digitalRect = Rect(Point2f(vertex[0].x+(vertex[1].x-vertex[0].x)/4,MIN(vertex[0].y,vertex[1].y)),
+                Size((vertex[1].x-vertex[0].x)/2,MAX(extendLeftLightRec.size.height,extendRightLightRec.size.height)));
+        digitalRect = digitalRect & srcImgRect; //防止digitalRect越界
     }
     else if(armorType == SMALL_ARMOR)
     {
         //保留小装甲板的数字区域
-        digitalRect = Rect(_leftLightVertex[1],Size(_rightLightVertex[0].x-_leftLightVertex[1].x,extendLeftLightRec.size.height));
-        digitalImg = roiImg(digitalRect);
+        digitalRect = Rect(_leftLightVertex[2],Size(_rightLightVertex[1].x-_leftLightVertex[2].x,
+                MAX(extendLeftLightRec.size.height,extendRightLightRec.size.height)));
+        digitalRect = digitalRect & srcImgRect; //防止digitalRect越界
     }
     //得到数字区域的正视图
-    getFrontImg(digitalImg);
+    getFrontImg(digitalRect,roiImg);
 
     // 计算旋转分数
     rotationScore = rotaScore;
@@ -102,9 +125,12 @@ ArmorDescriptor::ArmorDescriptor(const LightDescriptor& leftLight, const LightDe
 }
 
 //要先用上面的构造函数完成初始化，_param才有值，不然该程序里面要出错
-void ArmorDescriptor::getFrontImg(const Mat& digitalImg)
+bool ArmorDescriptor::getFrontImg(const Rect& digitalRect,const Mat& roiImg)
 {
     int width, height;
+
+    if(roiImg.empty()) return false;//不加这句话，warpPerspective会报错
+
     if(armorType == BIG_ARMOR)
     {
         width = _param.big_armor_width;
@@ -116,25 +142,51 @@ void ArmorDescriptor::getFrontImg(const Mat& digitalImg)
         height = _param.small_armor_height;
     }
 
-    Point2f src[4]={vertex[0],vertex[1],vertex[2],vertex[3]};
+    Point2f src[4]={digitalRect.tl(),Point2f(digitalRect.tl().x+digitalRect.width,digitalRect.tl().y),
+                    digitalRect.br(),Point2f(digitalRect.br().x-digitalRect.width,digitalRect.br().y)};
     Point2f dis[4]={Point2f(0.0f,0.0f),Point2f(width,0.0f),Point2f(width,height),Point2f(0.0f,height)};
-    Mat _perspectiveTransformationMatrix = getPerspectiveTransform(src,dis);//得到透视变换矩阵
-    warpPerspective(digitalImg,frontImg,_perspectiveTransformationMatrix,Size(width,height));//进行透视变换
+    const Mat _perspectiveTransformationMatrix = getPerspectiveTransform(src,dis);//得到透视变换矩阵
+    warpPerspective(roiImg,frontImg,_perspectiveTransformationMatrix,Size(width,height));//进行透视变换(原始图像要比送入getPerspectiveTransform的原4点面积大才能正常变换，否则是一片黑色)
+
+//    static int f = 1;
+//    uchar keyVal = (uchar)waitKey(20);
+//    if(keyVal == 'q')
+//    {
+//        printf("\t\t已成功保存%d张图片至工程文件夹\n",f);
+//        pictureName = "/home/young/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/Samples/"
+//                       +to_string(f++)+".jpg"; //to_string:将数值转化为字符串。返回对应的字符串
+//       //        imwrite(pictureName,frontImg);
+    //    }
+
+    return true;
 }
 
+Ptr<ml::SVM> svmClassifier = ml::SVM::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
 bool ArmorDescriptor::isArmorPattern() const
 {
     Mat regulatedImg,imageNewSize;
-    frontImg.copyTo(regulatedImg);
+    cvtColor(frontImg,regulatedImg,COLOR_BGR2GRAY);
     resize(regulatedImg,regulatedImg,SVM_SAMPLE_SIZE); //统一训练集尺寸
     imageNewSize = regulatedImg.reshape(0,1);//图像深度不变，把图片矩阵转为一行储存
     imageNewSize.convertTo(imageNewSize,CV_32FC1);
 
-//    Ptr<ml::SVM> svmClassifier = ml::StatModel::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
-//    int result = static_cast<int>(svmClassifier->predict(imageNewSize));
-//    if(result == 1) return true;
-//    else
-//        return false;
+    int result = static_cast<int>(svmClassifier->predict(imageNewSize));
+    if(result == RM::Hero) return true;
+    else
+        return false;
+}
+
+void ArmorDescriptor::informationClear()
+{
+    rotationScore = 0;
+    sizeScore = 0;
+    distanceScore = 0;
+    finalScore = 0;
+    for(int i = 0; i < 4; i++)
+    {
+        vertex[i] = cv::Point2f(0, 0);
+    }
+    armorType = UNKNOWN_ARMOR;
 }
 
 ArmorDetector::ArmorDetector(const ArmorParam& armorParam)
@@ -159,7 +211,7 @@ void ArmorDetector::loadImg(const cv::Mat&  srcImg)
     if(_armorFindFlag == ARMOR_LOCAL && _trackCounter != _param.max_track_num)//在追踪模式下，连续处理3000张图片后，进行全局检测一次
     {
         Rect tempRect = boundingRect(_targetArmor.vertex);
-        tempRect = cvex::scaleRect(tempRect, Vec2f(2,2));	//以中心为锚点，长宽各放大2倍
+        tempRect = cvex::scaleRect(tempRect, Vec2f(3,2));	//以中心为锚点，宽扩大3倍，高扩大2倍
         _roi = tempRect & srcImgRect;//防止tempRect越界
         _roiImg = _srcImg(_roi).clone();
     }
@@ -173,13 +225,30 @@ void ArmorDetector::loadImg(const cv::Mat&  srcImg)
 
 int ArmorDetector::detect()
 {
+#ifdef USED_CAMERA
     vector<Mat> channels;
     Mat imageBlueChannel;
     Mat imageRedChannel;
+#endif
 
     _armors.clear();
     vector<LightDescriptor> lightInformations;
 
+#ifdef DEBUG_DETECTION
+    Mat hsvImage,imageBrightness,binaryImage,equalImage;
+    Mat debugElement = getStructuringElement(MORPH_RECT,Size(3,3));
+
+    cvtColor(_roiImg,hsvImage,COLOR_BGR2HSV);
+    vector<Mat> channels;
+    split(hsvImage,channels);
+    imageBrightness = channels.at(2);
+    equalizeHist(imageBrightness,equalImage); //直方图均衡化，使灰度值分布更均匀，更好地阈值化处理
+    binaryImage=Mat::zeros(imageBrightness.size(),CV_8UC1);
+    threshold(equalImage,binaryImage,_param.brightness_threshold,255,THRESH_BINARY);
+    morphologyEx(binaryImage,binaryImage,MORPH_OPEN,debugElement);//开运算，消除细小物体
+#endif
+
+#ifdef USED_CAMERA
     split(_roiImg,channels); //把一个3通道图像转换成3个单通道图像
     imageBlueChannel = channels.at(0);
     imageRedChannel = channels.at(2);
@@ -195,25 +264,26 @@ int ArmorDetector::detect()
     threshold(_grayImg,binaryImg,_param.brightness_threshold,255,THRESH_BINARY);
     Mat element = getStructuringElement(MORPH_RECT,Size(5,5));
     //形态学滤波：开运算（消除小物体）
-    morphologyEx(binaryImg,binaryImg,MORPH_OPEN,element);
+    morphologyEx(binaryImg,binaryImg,MORPH_OPEN,element);   
+#endif
 
     vector<vector<Point>> lightContours;
     vector<Vec4i> hierarchy;
 
-    findContours(binaryImg,lightContours,hierarchy,RETR_EXTERNAL,CHAIN_APPROX_SIMPLE);
+    findContours(binaryImage,lightContours,hierarchy,RETR_EXTERNAL,CHAIN_APPROX_SIMPLE);
 
     for(const auto& contour : lightContours)
     {
         //得到面积
         double lightContourArea = contourArea(contour);
         //轮廓点数不够或面积太小的不要
-        if(contour.size()<=_param.light_min_size || lightContourArea < _param.light_min_area) continue;
-        //椭圆拟合区域得到外接旋转矩形
-        RotatedRect lightRec = fitEllipse(contour);
+        if(lightContourArea < _param.light_min_area) continue;
+        //寻找最小外包围矩形
+        RotatedRect lightRec = minAreaRect(contour);
+        //矫正矩形角度
         adjustRec(lightRec);
 
         if(lightRec.size.width > lightRec.size.height) continue;
-
         //因为颜色通道相减后己方灯条直接过滤，不需要判断颜色了,可以直接将灯条保存
         lightInformations.emplace_back(LightDescriptor(lightRec));
     }
@@ -281,10 +351,25 @@ int ArmorDetector::detect()
     sort(_armors.begin(), _armors.end(), compareArmor);
     _targetArmor = _armors[0];
 
+#ifdef SHOW_RESULT
+    for(size_t i=0;i<4;i++) //*********************************************************************************************
+        line(_roiImg,_targetArmor.vertex[i],_targetArmor.vertex[(i+1)%4],Scalar(0,0,255),2);
+    imshow("【原始图像】",_roiImg);
+#endif
     //更新在追踪模式下的处理次数，达到3000，变为整幅检测
     _trackCounter++;
 
     return _armorFindFlag = ARMOR_LOCAL;
+}
+
+const vector<Point2f> ArmorDetector::getArmorVertex() const
+{
+    return _targetArmor.vertex;
+}
+
+int ArmorDetector::getArmorType() const
+{
+    return _targetArmor.armorType;
 }
 
 

@@ -1,13 +1,15 @@
 TEMPLATE = app
-CONFIG += console c++11
+CONFIG += console
 CONFIG -= app_bundle
 CONFIG -= qt
+CONFIG += c++14
 
 SOURCES += \
     Main/main.cpp \
     Main/threadcontrol.cpp \
     Armor/armordetector.cpp \
-    General/opencv_extended.cpp
+    General/opencv_extended.cpp \
+    Pose/AngleSolver.cpp
 
 INCLUDEPATH += /usr/local/include \
                /usr/local/include/opencv \
@@ -19,8 +21,14 @@ LIBS += /usr/local/lib/libopencv_imgproc.so \
         /usr/local/lib/libopencv_video.so \
         /usr/local/lib/libopencv_videoio.so \
         /usr/local/lib/libopencv_calib3d.so \
+        /usr/local/lib/libopencv_ml.so \
+        /usr/lib/x86_64-linux-gnu/libpthread.so
 
 HEADERS += \
     Main/threadcontrol.h \
     Armor/armordetector.h \
-    General/opencv_extended.h
+    General/opencv_extended.h \
+    Pose/AngleSolver.hpp
+
+DISTFILES += \
+    camera_param/camera.xml

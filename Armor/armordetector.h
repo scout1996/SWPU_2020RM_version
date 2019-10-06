@@ -6,8 +6,22 @@
 
 namespace RM {
 
+
 #define SVM_SAMPLE_SIZE Size(50,50)
-#define SVM_TRAINING_MODEL_PATH "../TestVideo/1.avi"
+#define SVM_TRAINING_MODEL_PATH "/home/young-pc/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/SVM_Model/svm.xml"
+
+#define SHOW_RESULT
+#define DEBUG_DETECTION
+//#define USED_CAMERA
+
+enum RobotType
+{
+    Hero = 1,      //英雄
+    Engineer = 2,  //工程
+    Standard = 3,  //步兵
+    Sentry =4,     //哨兵
+    Aerial = 5     //无人机
+};
 
 enum ColorChannels
 {
@@ -69,14 +83,14 @@ struct ArmorParam
     ArmorParam()
     {
         //pre-treatment
-        brightness_threshold = 210;
+        brightness_threshold = 250;
         color_threshold = 40;
         light_color_detect_extend_ratio = 1.1f;
 
         // Filter lights
-        light_min_area = 10.0f;
+        light_min_area = 10.0f; //10.0
         light_max_angle = 45.0f;
-        light_min_size = 5.0f;
+        light_min_size = 5.0f;  //5.0
         light_contour_min_solidity = 0.5f;
         light_max_ratio = 1.0f;
 
@@ -89,16 +103,14 @@ struct ArmorParam
         // Filter armor
         armor_big_armor_ratio = 3.2f;
         armor_small_armor_ratio = 2.0f;
-        //armor_max_height_ = 100.0;
-        //armor_max_angle_ = 30.0;
         armor_min_aspect_ratio_ = 1.0f;
         armor_max_aspect_ratio_ = 5.0f;
 
         //装甲板尺寸mm
-        big_armor_width = 235;
-        big_armor_height = 127;
-        small_armor_width =140;
-        small_armor_height = 125;
+        big_armor_width = 100;
+        big_armor_height = 60;
+        small_armor_width =50;
+        small_armor_height = 50;
 
         //other params
         distance_offset_normalized_base = 200.0f;
@@ -150,41 +162,19 @@ class ArmorDescriptor
 public:
 
     //无参构造函数
-    ArmorDescriptor()
-    {
-        rotationScore = 0;
-        sizeScore = 0;
-        distanceScore = 0;
-        finalScore = 0;
-        vertex.resize(4); //设置vertex容器的大小为4
-        for(int i = 0; i < 4; i++)
-        {
-            vertex[i] = cv::Point2f(0, 0);
-        }
-        armorType = UNKNOWN_ARMOR;
-    }
+    ArmorDescriptor();
 
     //有参构造函数
     ArmorDescriptor(const LightDescriptor& leftLight, const LightDescriptor& rightLight, const int type, const cv::Mat& roiImg,const float rotationScore, ArmorParam armorParam);
-    //从原图像四个顶点经过透视变换后得到正视图
-    void getFrontImg(const cv::Mat& digitalImg);
 
-    //清除装甲板数据
-    void informationClear()
-    {
-        rotationScore = 0;
-        sizeScore = 0;
-        distanceScore = 0;
-        finalScore = 0;
-        for(int i = 0; i < 4; i++)
-        {
-            vertex[i] = cv::Point2f(0, 0);
-        }
-        armorType = UNKNOWN_ARMOR;
-    }
+    //从原图像四个顶点经过透视变换后得到正视图
+    bool getFrontImg(const cv::Rect& digitalRect,const cv::Mat& roiImg);
 
     //利用SVM判断中心图案是否为数字，是不是装甲板
     bool isArmorPattern() const;
+
+    //清除装甲板数据
+    void informationClear();
 
 public:
     std::array<cv::RotatedRect,2> lightPairs;//0 left light, 1 right light
@@ -196,6 +186,7 @@ public:
     int armorType;
     ArmorParam _param;
     std::vector<cv::Point2f> vertex;//装甲板的四个顶点
+    std::string pictureName;
 };
 
 class ArmorDetector
@@ -258,6 +249,7 @@ private:
     std::vector<ArmorDescriptor> _armors;
 
 private:
+    //sort函数的回调函数，按照下列方法排序
     static bool compareLight(const LightDescriptor ld1, const LightDescriptor ld2)
     {
         return ld1.center.x < ld2.center.x;
