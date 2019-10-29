@@ -71,7 +71,22 @@ void ThreadControl::init()
 void ThreadControl::imageProduce()
 {
 #ifdef DEBUG_USED_VIDEO
-    VideoCapture capture(ARMOR_VIDEO_PATH);
+    //VideoCapture capture(ARMOR_VIDEO_PATH);
+    VideoCapture capture(CAMERA_ID);
+    capture.set(CV_CAP_PROP_FRAME_WIDTH, 640);//宽度
+    capture.set(CV_CAP_PROP_FRAME_HEIGHT, 512);//高度，工业摄像头不支持640*480
+    capture.set(CV_CAP_PROP_FOURCC, CV_FOURCC('M', 'J', 'P', 'G'));//图像格式为mjpg，只有此格式下能到最高帧率
+    capture.set(CV_CAP_PROP_FPS, 120);//帧数
+    capture.set(CV_CAP_PROP_GAMMA, 300);//gamma值 工业摄像头支持gamma值范围为100-300
+    capture.set(CV_CAP_PROP_AUTO_EXPOSURE, 0.25);//改为手动曝光
+    capture.set(CV_CAP_PROP_EXPOSURE,0.02); //新买的摄像头曝光值0.02较为合适
+
+    cout<< capture.get(CV_CAP_PROP_FRAME_WIDTH) << endl;
+    cout<< capture.get(CV_CAP_PROP_FRAME_HEIGHT) << endl;
+    cout<< capture.get(CV_CAP_PROP_FPS) << endl;
+    cout<< capture.get(CV_CAP_PROP_EXPOSURE) << endl;
+    cout<< capture.get(CV_CAP_PROP_GAMMA) << endl;
+
     while(1)
     {      
         capture >> _frame;
@@ -82,13 +97,7 @@ void ThreadControl::imageProduce()
             break;
         }
         _buffer.push(_frame);
-        uchar KeyValue = (uchar)waitKey(1);
-        if(KeyValue == 27)
-        {
-            _quitFlag = true;
-            break;
-        }
-        this_thread::sleep_for(chrono::milliseconds(32));//读入视频的帧率为30
+        //this_thread::sleep_for(chrono::milliseconds(32));//使读入视频的帧率为30
     }
 #endif
 
@@ -118,7 +127,7 @@ void ThreadControl::imageProcess()
 
         _armorDetectorPtr->loadImg(_srcImg);
         armorFindFlag = _armorDetectorPtr->detect();
-
+        waitKey(1);//**********************************************************************************************************
         if(armorFindFlag == ArmorDetector::ARMOR_LOCAL || armorFindFlag == ArmorDetector::ARMOR_GLOBAL)
         {
             armorType = _armorDetectorPtr->getArmorType();

@@ -12,6 +12,7 @@ namespace RM {
 
 #define ARMOR_VIDEO_PATH "/home/young-pc/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/TestVideo/1.avi"
 #define ARMOR_IMAGE_PATH "/home/young-pc/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/TestImage/1.jpg"
+#define CAMERA_ID 0
 
 #define DEBUG_USED_VIDEO
 //#define DEBUG_USED_IMAGE

@@ -12,8 +12,8 @@ namespace RM {
 #define SVM_TRAINING_MODEL_PATH "/home/young-pc/SWPU_2020RoboMaster_version/SWPU_2020RoboMaster_version/SVM_Model/svm.xml"
 
 #define SHOW_RESULT
-#define DEBUG_DETECTION
-//#define USED_CAMERA
+//#define DEBUG_DETECTION
+#define USED_CAMERA
 
 enum RobotType
 {

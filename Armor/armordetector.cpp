@@ -161,7 +161,7 @@ bool ArmorDescriptor::getFrontImg(const Rect& digitalRect,const Mat& roiImg)
     return true;
 }
 
-Ptr<ml::SVM> svmClassifier = ml::SVM::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
+Ptr<ml::SVM> svmClassifier = ml::StatModel::load<ml::SVM>(SVM_TRAINING_MODEL_PATH);
 bool ArmorDescriptor::isArmorPattern() const
 {
     Mat regulatedImg,imageNewSize;
@@ -249,6 +249,7 @@ int ArmorDetector::detect()
 #endif
 
 #ifdef USED_CAMERA
+    imshow("_roiImg",_roiImg);
     split(_roiImg,channels); //把一个3通道图像转换成3个单通道图像
     imageBlueChannel = channels.at(0);
     imageRedChannel = channels.at(2);
@@ -258,13 +259,13 @@ int ArmorDetector::detect()
         _grayImg = imageRedChannel - imageBlueChannel;
     else if(_enemyColor == BLUE)
         _grayImg = imageBlueChannel - imageRedChannel;
-
-    Mat binaryImg;
+    Mat binaryImage;
     //阈值化
-    threshold(_grayImg,binaryImg,_param.brightness_threshold,255,THRESH_BINARY);
-    Mat element = getStructuringElement(MORPH_RECT,Size(5,5));
+    threshold(_grayImg,binaryImage,100,255,THRESH_BINARY);
+    Mat element = getStructuringElement(MORPH_RECT,Size(3,3));
     //形态学滤波：开运算（消除小物体）
-    morphologyEx(binaryImg,binaryImg,MORPH_OPEN,element);   
+    morphologyEx(binaryImage,binaryImage,MORPH_OPEN,element);
+    imshow("binaryImage",binaryImage);
 #endif
 
     vector<vector<Point>> lightContours;
@@ -328,10 +329,10 @@ int ArmorDetector::detect()
     }
     if(_armors.empty()) return _armorFindFlag = ARMOR_NO;
     //排除虚假的装甲板
-    _armors.erase(remove_if(_armors.begin(), _armors.end(), [this](ArmorDescriptor i)
-       {//isArmorPattern函数判断是不是装甲板，将装甲板中心的图片提取后让识别函数去识别，识别可以用svm或者模板匹配等
-           return false == (i.isArmorPattern());
-    }), _armors.end());
+//    _armors.erase(remove_if(_armors.begin(), _armors.end(), [this](ArmorDescriptor i)
+//       {//isArmorPattern函数判断是不是装甲板，将装甲板中心的图片提取后让识别函数去识别，识别可以用svm或者模板匹配等
+//           return false == (i.isArmorPattern());
+//    }), _armors.end());
 
     if(_armors.empty())
     {
@@ -354,7 +355,7 @@ int ArmorDetector::detect()
 #ifdef SHOW_RESULT
     for(size_t i=0;i<4;i++) //*********************************************************************************************
         line(_roiImg,_targetArmor.vertex[i],_targetArmor.vertex[(i+1)%4],Scalar(0,0,255),2);
-    imshow("【原始图像】",_roiImg);
+    imshow("_roiImg",_roiImg); //opencv3.4.6不支持图像显示窗格名有中文格式
 #endif
     //更新在追踪模式下的处理次数，达到3000，变为整幅检测
     _trackCounter++;
