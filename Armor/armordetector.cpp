@@ -31,19 +31,17 @@ using namespace std;
 
 namespace RM {
 
-//矫正矩形，swap互换width和height，再旋转，矩形不变
+/**
+  * @brief          矫正矩形，swap互换width和height，再旋转，矩形不变
+  * @author         Young
+  * @param[in]      旋转矩形
+  * @retval         返回空
+  * @waring         旋转矩形的角度是[-90,0),灯条的筛选条件是宽小于高，若装甲板往左偏时，根据旋转矩形角度的定义，正常的灯条宽会大于高，不符合筛选条件
+  *                 需要把宽和高互换，再旋转
+  */
 #define adjustRec(rec)       \
 {                            \
-    if(rec.angle >= 90.0f)   \
-        rec.angle -= 180.0f; \
-    else if(rec.angle < -90.0f)\
-        rec.angle += 180.0f; \
-    if(rec.angle >= 45.0f)   \
-    {                        \
-        swap(rec.size.width,rec.size.height); \
-        rec.angle -= 90.0f;  \
-    }                        \
-    else if(rec.angle < -45.0f) \
+    if(rec.size.width > rec.size.height) \
     {                           \
         swap(rec.size.width,rec.size.height); \
         rec.angle += 90.0f;     \
@@ -208,19 +206,19 @@ void ArmorDetector::loadImg(const cv::Mat&  srcImg)
     _srcImg = srcImg;
     Rect srcImgRect = Rect(Point(0,0),_srcImg.size());
 
-    if(_armorFindFlag == ARMOR_LOCAL && _trackCounter != _param.max_track_num)//在追踪模式下，连续处理3000张图片后，进行全局检测一次
-    {
-        Rect tempRect = boundingRect(_targetArmor.vertex);
-        tempRect = cvex::scaleRect(tempRect, Vec2f(3,2));	//以中心为锚点，宽扩大3倍，高扩大2倍
-        _roi = tempRect & srcImgRect;//防止tempRect越界
-        _roiImg = _srcImg(_roi).clone();
-    }
-    else
-    {
+//    if(_armorFindFlag == ARMOR_LOCAL && _trackCounter != _param.max_track_num)//在追踪模式下，连续处理3000张图片后，进行全局检测一次
+//    {
+//        Rect tempRect = boundingRect(_targetArmor.vertex);
+//        tempRect = cvex::scaleRect(tempRect, Vec2f(3,2));	//以中心为锚点，宽扩大3倍，高扩大2倍
+//        _roi = tempRect & srcImgRect;//防止tempRect越界
+//        _roiImg = _srcImg(_roi).clone();
+//    }
+//    else
+//    {
         _roi = srcImgRect;
         _roiImg = _srcImg.clone();
         _trackCounter = 0;
-    }
+//    }
 }
 
 int ArmorDetector::detect()
@@ -262,9 +260,9 @@ int ArmorDetector::detect()
     Mat binaryImage;
     //阈值化
     threshold(_grayImg,binaryImage,100,255,THRESH_BINARY);
-    Mat element = getStructuringElement(MORPH_RECT,Size(3,3));
-    //形态学滤波：开运算（消除小物体）
-    morphologyEx(binaryImage,binaryImage,MORPH_OPEN,element);
+    Mat elementClose = getStructuringElement(MORPH_RECT,Size(7,7));
+    //形态学滤波：闭运算（扩大白色区域）
+    morphologyEx(binaryImage,binaryImage,MORPH_CLOSE,elementClose);
     imshow("binaryImage",binaryImage);
 #endif
 
@@ -299,7 +297,7 @@ int ArmorDetector::detect()
             const LightDescriptor& leftLight = lightInformations[i];
             const LightDescriptor& rightLight = lightInformations[j];
             //角差
-            float angleDiff = fabs(leftLight.angle - rightLight.angle);
+            float angleDiff = fabs(leftLight.angle - rightLight.angle);     
             //高度差比率
             float heightDiffRatio = fabs(leftLight.height - rightLight.height) / max(leftLight.height, rightLight.height);
             //筛选

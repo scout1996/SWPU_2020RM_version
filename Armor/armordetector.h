@@ -97,7 +97,7 @@ struct ArmorParam
 
         // Filter pairs
         light_max_angle_diff = 7.0f; //20
-        light_max_height_diff_ratio = 0.2f; //0.5
+        light_max_height_diff_ratio = 0.4f; //0.4
         light_max_y_diff_ratio_ = 1.5f; //100
         light_min_x_diff_ratio_ = 0.5f; //100
 

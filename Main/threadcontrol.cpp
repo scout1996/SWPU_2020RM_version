@@ -80,12 +80,20 @@ void ThreadControl::imageProduce()
     capture.set(CV_CAP_PROP_GAMMA, 300);//gamma值 工业摄像头支持gamma值范围为100-300
     capture.set(CV_CAP_PROP_AUTO_EXPOSURE, 0.25);//改为手动曝光
     capture.set(CV_CAP_PROP_EXPOSURE,0.02); //新买的摄像头曝光值0.02较为合适
+    capture.set(CV_CAP_PROP_SATURATION, 1);//饱和度 100（对应v4l2工具上的值）
+    capture.set(CV_CAP_PROP_BRIGHTNESS, 0.26);//明亮度 -30（对应v4l2工具上的值）
+    capture.set(CV_CAP_PROP_CONTRAST,0);//对比度 0
+    capture.set(CV_CAP_PROP_HUE, 0.5); //色调 0（对应v4l2工具上的值）
 
     cout<< capture.get(CV_CAP_PROP_FRAME_WIDTH) << endl;
     cout<< capture.get(CV_CAP_PROP_FRAME_HEIGHT) << endl;
     cout<< capture.get(CV_CAP_PROP_FPS) << endl;
     cout<< capture.get(CV_CAP_PROP_EXPOSURE) << endl;
     cout<< capture.get(CV_CAP_PROP_GAMMA) << endl;
+    cout<< capture.get(CV_CAP_PROP_SATURATION) << endl;
+    cout<< capture.get(CV_CAP_PROP_BRIGHTNESS) << endl;
+    cout<< capture.get(CV_CAP_PROP_CONTRAST) << endl;
+    cout<< capture.get(CV_CAP_PROP_HUE) << endl;
 
     while(1)
     {      

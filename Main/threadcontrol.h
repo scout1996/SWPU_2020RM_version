@@ -17,7 +17,7 @@ namespace RM {
 #define DEBUG_USED_VIDEO
 //#define DEBUG_USED_IMAGE
 
-#define GET_WORK_DURATION
+//#define GET_WORK_DURATION
 
 class FrameBuffer
 {
